@@ -1,0 +1,11 @@
+
+Abstract
+--------
+
+A tool for automatically mount shared resources in gtk-bookmarks.
+
+License
+-------
+
+This project is licensed under the terms of the GPL v2.0,
+see http://www.gnu.org/licenses/gpl-2.0.html
