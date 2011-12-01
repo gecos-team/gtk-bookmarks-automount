@@ -25,12 +25,14 @@ import shlex
 import subprocess
 import gobject
 #import gtk
+import urlparse
+import gnomekeyring
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 
+LOCK_FILE = os.path.join(os.environ['HOME'], '.gtk-bookmarks-automount.lock')
 GTK_BOOKMARKS = os.path.join(os.environ['HOME'], '.gtk-bookmarks')
 GVFS_MOUNT = '/usr/bin/env gvfs-mount'
-LOCK_FILE = '/var/run/gtk-bookmarks-automount.lock'
 
 NM_DBUS_SERVICE = "org.freedesktop.NetworkManager"
 NM_DBUS_OBJECT_PATH = "/org/freedesktop/NetworkManager"
@@ -77,23 +79,51 @@ def read_shares():
 
     return shares
 
+def has_credentials(share):
+    ret = False
+    parsed_uri = list(urlparse.urlparse(share))
+    protocol = parsed_uri[0]
+    host = parsed_uri[1]
+    attrs = {'server': host, 'protocol': protocol}
+    items = gnomekeyring.find_items_sync(gnomekeyring.ITEM_NETWORK_PASSWORD, attrs)
+    log(items)
+    ret = len(items) > 0
+    return ret
+
 def on_nm_state_changed(state):
     if state == NM_STATE_CONNECTED_GLOBAL:
         log('NM_STATE_CONNECTED_GLOBAL signal received.')
         shares = read_shares()
         for share in shares:
+
             share = share.strip()
+            if not has_credentials(share):
+                continue
+
             log('Trying to mount %s ...' % (share,))
             cmd = '%s %s' % (GVFS_MOUNT, share)
             pid, ret, output = run_command(cmd)
+
             if ret == 0:
                 msg = '\tShared %s has been mounted: ret_val == %s' % (share, ret)
             else:
                 msg = '\tShared %s could not be mounted: ret_val == %s' % (share, ret)
+
             log(msg)
 
 def get_lock():
-    return True
+    if os.path.exists(LOCK_FILE):
+        return False
+
+    try:
+        f = open(LOCK_FILE, 'w')
+        f.write(str(os.getpid()))
+        f.close()
+        return True
+
+    except IOError as e:
+        log('Could not write lock file in %s' % (LOCK_FILE,))
+        return False
 
 def main():
 
