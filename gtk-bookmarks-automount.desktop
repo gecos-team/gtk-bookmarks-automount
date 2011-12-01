@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Gtk Bookmarks Automount Daemon
+Exec=/usr/bin/python /usr/lib/gtk-bookmarks-automount/gtk-bookmarks-automount.py
+OnlyShowIn=GNOME;Unity;
+NoDisplay=true
+X-GNOME-Autostart-Phase=Initialization
+X-GNOME-Autostart-Notify=true
+X-GNOME-AutoRestart=true
+X-Ubuntu-Gettext-Domain=gtk-bookmarks-automount
+
+X-GNOME-Autostart-Delay=120
+
+StartupNotify=false
