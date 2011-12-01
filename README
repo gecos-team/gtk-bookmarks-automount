@@ -1,8 +1,15 @@
-
 Abstract
 --------
 
-A tool for automatically mount shared resources in gtk-bookmarks.
+A tool for automatically mount shared resources found in gtk-bookmarks.
+The real automount job is done by gvfs when the user start his session,
+just modify the files in /usr/share/gvfs/mounts and set AutoMount to true.
+
+This script is useful in case the network was down when the user started
+his session. It'll handle signals from NetworkManager and mount the
+shared resources when the network comes alive.
+
+
 
 License
 -------
