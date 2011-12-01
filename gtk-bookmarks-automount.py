@@ -26,6 +26,7 @@ import subprocess
 import gobject
 #import gtk
 import urlparse
+import syslog
 import gnomekeyring
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
@@ -47,8 +48,8 @@ NM_STATE_CONNECTED_LOCAL = 50    # A network device is connected, but there is o
 NM_STATE_CONNECTED_SITE = 60    # A network device is connected, but there is only site-local connectivity.
 NM_STATE_CONNECTED_GLOBAL = 70    # A network device is connected, with global network connectivity.
 
-def log(str):
-    print str
+def log(message, priority=syslog.LOG_INFO):
+    syslog.syslog(priority, message)
 
 def run_command(cmd):
     args = shlex.split(cmd)
@@ -76,7 +77,7 @@ def read_shares():
         shares = filter(f, lines)
 
     except IOError as e:
-        log('Could not read the shared resources from %s' % (GTK_BOOKMARKS,))
+        log('Could not read the shared resources from %s' % (GTK_BOOKMARKS,), syslog.LOG_ERR)
 
     return shares
 
@@ -104,9 +105,9 @@ def on_nm_state_changed(state):
             pid, ret, output = run_command(cmd)
 
             if ret == 0:
-                msg = '\tShared %s has been mounted: ret_val == %s' % (shared, ret)
+                msg = 'Shared %s has been mounted: ret_val == %s' % (shared, ret)
             else:
-                msg = '\tShared %s could not be mounted: ret_val == %s' % (shared, ret)
+                msg = 'Shared %s could not be mounted: ret_val == %s' % (shared, ret)
 
             log(msg)
 
@@ -121,7 +122,7 @@ def get_lock():
         return True
 
     except IOError as e:
-        log('Could not write lock file in %s' % (LOCK_FILE,))
+        log('Could not write lock file in %s' % (LOCK_FILE,), syslog.LOG_ERR)
         return False
 
 def main():
@@ -141,6 +142,7 @@ def main():
         loop.run()
     finally:
         os.unlink(LOCK_FILE)
+        log('gtk-bookmarks automount script stoped.')
 
 if __name__ == '__main__':
     main()
