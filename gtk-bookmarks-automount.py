@@ -135,9 +135,12 @@ def main():
     proxy = bus.get_object(NM_DBUS_SERVICE, NM_DBUS_OBJECT_PATH)
     proxy.connect_to_signal('StateChanged', on_nm_state_changed)
 
-    #gtk.main()
-    loop = gobject.MainLoop()
-    loop.run()
+    try:
+        #gtk.main()
+        loop = gobject.MainLoop()
+        loop.run()
+    finally:
+        os.unlink(LOCK_FILE)
 
 if __name__ == '__main__':
     main()
