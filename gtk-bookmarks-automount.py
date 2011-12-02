@@ -30,6 +30,7 @@ import syslog
 import gnomekeyring
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
+from multiprocessing import Process
 
 LOCK_FILE = os.path.join(os.environ['HOME'], '.gtk-bookmarks-automount.lock')
 GTK_BOOKMARKS = os.path.join(os.environ['HOME'], '.gtk-bookmarks')
@@ -55,15 +56,14 @@ def run_command(cmd):
     args = shlex.split(cmd)
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     exit_code = os.waitpid(process.pid, 0)
-    output = process.communicate()[0]
-    output = output.strip()
+    output = process.communicate()
 
-    #print cmd, exit_code
-    #if exit_code[1] != 0:
-    #    raise Exception(output)
+    pid = exit_code[0]
+    retval = exit_code[1]
+    stdout = output[0].strip()
+    stderr = output[1].strip()
 
-    # PID, exit code, output
-    return (exit_code[0], exit_code[1], output)
+    return (pid, retval, stdout, stderr)
 
 def read_shares():
 
@@ -86,33 +86,34 @@ def shared_has_credentials(shared):
     protocol = parsed_uri[0]
     host = parsed_uri[1]
     attrs = {'server': host, 'protocol': protocol}
-    items = gnomekeyring.find_items_sync(gnomekeyring.ITEM_NETWORK_PASSWORD, attrs)
-    ret = len(items) > 0
+    try:
+        items = gnomekeyring.find_items_sync(gnomekeyring.ITEM_NETWORK_PASSWORD, attrs)
+        ret = len(items) > 0
+    except gnomekeyring.NoMatchError as e:
+        ret = False
     return ret
+
+def mount_shared(shared):
+    log('Trying to mount %s ...' % (shared,))
+    cmd = '%s %s' % (GVFS_MOUNT, shared)
+    pid, retval, stdout, stderr = run_command(cmd)
+    msg = '%s %s: ret_val == %s' % (stdout, stderr, retval)
+    log('%s: %s' % (shared, msg.strip()))
 
 def on_nm_state_changed(state):
     if state == NM_STATE_CONNECTED_GLOBAL:
+
         log('NM_STATE_CONNECTED_GLOBAL signal received.')
         shares = read_shares()
+
         for shared in shares:
-
             shared = shared.strip()
-            if not shared_has_credentials(shared):
-                continue
-
-            log('Trying to mount %s ...' % (shared,))
-            cmd = '%s %s' % (GVFS_MOUNT, shared)
-            pid, ret, output = run_command(cmd)
-
-            if ret == 0:
-                msg = 'Shared %s has been mounted: ret_val == %s' % (shared, ret)
-            else:
-                msg = 'Shared %s could not be mounted: ret_val == %s' % (shared, ret)
-
-            log(msg)
+            if shared_has_credentials(shared):
+                Process(target=mount_shared, args=(shared,)).start()
 
 def get_lock():
     if os.path.exists(LOCK_FILE):
+        log('Could not get lock, process exists with another PID.', syslog.LOG_ERR)
         return False
 
     try:
