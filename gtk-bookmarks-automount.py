@@ -32,8 +32,8 @@ import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 from multiprocessing import Process
 
-LOCK_FILE = os.path.join(os.environ['HOME'], '.gtk-bookmarks-automount.lock')
-GTK_BOOKMARKS = os.path.join(os.environ['HOME'], '.gtk-bookmarks')
+LOCK_FILE_NAME = '.gtk-bookmarks-automount.lock'
+GTK_BOOKMARKS_NAME = '.gtk-bookmarks'
 GVFS_MOUNT = '/usr/bin/env gvfs-mount'
 WATCHED_PROTOCOLS = ('smb://',)
 
@@ -51,6 +51,12 @@ NM_STATE_CONNECTED_GLOBAL = 70    # A network device is connected, with global n
 
 def log(message, priority=syslog.LOG_INFO):
     syslog.syslog(priority, message)
+
+def get_lock_file():
+    return os.path.join(os.environ['HOME'], LOCK_FILE_NAME)
+
+def get_bookmarks_file():
+    return os.path.join(os.environ['HOME'], GTK_BOOKMARKS_NAME)
 
 def run_command(cmd):
     args = shlex.split(cmd)
@@ -70,14 +76,14 @@ def read_shares():
     shares = []
 
     try:
-        f = open(GTK_BOOKMARKS, 'r')
+        f = open(get_bookmarks_file(), 'r')
         lines = f.readlines()
         f.close()
         def f(x): return x.startswith(WATCHED_PROTOCOLS)
         shares = filter(f, lines)
 
     except IOError as e:
-        log('Could not read the shared resources from %s' % (GTK_BOOKMARKS,), syslog.LOG_ERR)
+        log('Could not read the shared resources from %s' % (get_bookmarks_file(),), syslog.LOG_ERR)
 
     return shares
 
@@ -112,18 +118,18 @@ def on_nm_state_changed(state):
                 Process(target=mount_shared, args=(shared,)).start()
 
 def get_lock():
-    if os.path.exists(LOCK_FILE):
+    if os.path.exists(get_lock_file()):
         log('Could not get lock, process exists with another PID.', syslog.LOG_ERR)
         return False
 
     try:
-        f = open(LOCK_FILE, 'w')
+        f = open(get_lock_file(), 'w')
         f.write(str(os.getpid()))
         f.close()
         return True
 
     except IOError as e:
-        log('Could not write lock file in %s' % (LOCK_FILE,), syslog.LOG_ERR)
+        log('Could not write lock file in %s' % (get_lock_file(),), syslog.LOG_ERR)
         return False
 
 def main():
@@ -141,9 +147,12 @@ def main():
         #gtk.main()
         loop = gobject.MainLoop()
         loop.run()
-    finally:
-        os.unlink(LOCK_FILE)
-        log('gtk-bookmarks automount script stoped.')
+
+    except Exception as e:
+        log(str(e), syslog.LOG_ERR)
+
+    os.unlink(get_lock_file())
+    log('gtk-bookmarks automount script stoped.')
 
 if __name__ == '__main__':
     main()
