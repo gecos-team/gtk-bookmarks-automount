@@ -1,8 +1,26 @@
-
 Abstract
 --------
 
-A tool for automatically mount shared resources in gtk-bookmarks.
+A tool for automatically mount shared resources found in gtk-bookmarks.
+The real automount job is done by gvfs when the user starts his session,
+just modify the files in /usr/share/gvfs/mounts and set AutoMount = true.
+
+This script is useful in case the network was down when the user started
+his session. It'll handle signals from NetworkManager and mount the
+shared resources when the network comes alive.
+
+Install
+-------
+
+- Copy the .desktop file to /etc/xdg/autostart/gtk-bookmarks-automount.desktop
+- Copy the python script to /usr/lib/gtk-bookmarks-automount/gtk-bookmarks-automount.py
+
+Docs
+----
+
+For more info about gnome-session and DBus signals:
+ - http://live.gnome.org/SessionManagement/GnomeSession
+ - http://people.gnome.org/~mccann/gnome-session/docs/gnome-session.html
 
 License
 -------
