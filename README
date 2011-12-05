@@ -9,11 +9,23 @@ This script is useful in case the network was down when the user started
 his session. It'll handle signals from NetworkManager and mount the
 shared resources when the network comes alive.
 
+The shared resources will only be mounted if the correct credentials were
+previously stored in gnome-keyring, that means you need to connect manually
+to the resource the first time and save the credentials in the keyring.
+
+The script will attempt to connect to samba resources by default,
+if you want to connect with other protocols, include that protocols in
+the WATCHED_PROTOCOLS list.
+
+
 Install
 -------
 
 - Copy the .desktop file to /etc/xdg/autostart/gtk-bookmarks-automount.desktop
 - Copy the python script to /usr/bin/gtk-bookmarks-automount.py
+- Restart the gnome session.
+
+You should see then some messages in /var/log/syslog file.
 
 Docs
 ----
