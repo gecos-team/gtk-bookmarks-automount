@@ -114,7 +114,7 @@ def mount_shared(shared):
     log('Trying to mount %s ...' % (shared,))
     cmd = '%s %s' % (GVFS_MOUNT, shared)
     pid, retval, stdout, stderr = run_command(cmd)
-    msg = '%s %s: ret_val == %s' % (stdout, stderr, retval)
+    msg = '%s %s: ret_val == %s' % (stdout.strip(), stderr.strip(), retval)
     log('%s: %s' % (shared, msg.strip()))
 
 def get_lock():

@@ -13,7 +13,7 @@ Install
 -------
 
 - Copy the .desktop file to /etc/xdg/autostart/gtk-bookmarks-automount.desktop
-- Copy the python script to /usr/lib/gtk-bookmarks-automount/gtk-bookmarks-automount.py
+- Copy the python script to /usr/bin/gtk-bookmarks-automount.py
 
 Docs
 ----
