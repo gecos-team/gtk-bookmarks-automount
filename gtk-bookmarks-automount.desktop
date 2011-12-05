@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Gtk Bookmarks Automount Daemon
-Exec=/usr/bin/python /usr/lib/gtk-bookmarks-automount/gtk-bookmarks-automount.py
+Exec=/usr/bin/python /usr/bin/gtk-bookmarks-automount.py
 OnlyShowIn=GNOME;Unity;
 NoDisplay=true
 StartupNotify=false
