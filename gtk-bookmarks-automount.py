@@ -145,6 +145,11 @@ def get_lock():
         return False
 
 def on_nm_state_changed(state):
+    ''' Handle the NetworkManager state changed signal. If we have
+    global network connectivity then try to connect to the resources.
+    We launch a new thread for each resource.
+    '''
+
     if state == NM_STATE_CONNECTED_GLOBAL:
 
         log('NM_STATE_CONNECTED_GLOBAL signal received.')
@@ -156,6 +161,11 @@ def on_nm_state_changed(state):
                 Process(target=mount_shared, args=(shared,)).start()
 
 def on_query_end_session(flags):
+    ''' The QueryEndSession signal is emited by gnome-session when
+    someone / something is asking for logout the session.
+    We have to respond in one second if we agree or not.
+    '''
+
     try:
         end_session_response = sm_client.get_dbus_method('EndSessionResponse', SM_DBUS_CLIENT_PRIVATE_PATH)
         end_session_response(True, '')
@@ -164,6 +174,11 @@ def on_query_end_session(flags):
         log(str(e))
 
 def on_end_session(flags):
+    ''' The EndSession signal is emited by gnome-session when
+    the session is about to end. We have to respond in ten second if
+    we agree or not.
+    '''
+
     try:
         end_session_response = sm_client.get_dbus_method('EndSessionResponse', SM_DBUS_CLIENT_PRIVATE_PATH)
         end_session_response(True, '')
@@ -172,9 +187,16 @@ def on_end_session(flags):
         log(str(e))
 
 def on_cancel_end_session():
+    ''' The CancelEndSession signal is emited by gnome-session when
+    some application respond not-OK in the QueryEndSession or EndSession
+    signals.
+    '''
     pass
 
 def on_stop_session():
+    ''' The Stop signal is emited by gnome-session when
+    the session is going to be terminated.
+    '''
     loop.quit()
 
 def register_dbus_client():
