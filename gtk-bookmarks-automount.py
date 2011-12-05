@@ -21,10 +21,10 @@ __copyright__ = "Copyright (C) 2011, Junta de Andalucía <devmaster@guadalinex.o
 __license__ = "GPL-2"
 
 import os
+import signal
 import shlex
 import subprocess
 import gobject
-#import gtk
 import urlparse
 import syslog
 import gnomekeyring
@@ -32,13 +32,23 @@ import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 from multiprocessing import Process
 
+loop = None
+sm_client = None
+
 LOCK_FILE_NAME = '.gtk-bookmarks-automount.lock'
 GTK_BOOKMARKS_NAME = '.gtk-bookmarks'
 GVFS_MOUNT = '/usr/bin/env gvfs-mount'
 WATCHED_PROTOCOLS = ('smb://',)
 
-NM_DBUS_SERVICE = "org.freedesktop.NetworkManager"
-NM_DBUS_OBJECT_PATH = "/org/freedesktop/NetworkManager"
+DESKTOP_AUTOSTART_ID = os.getenv('DESKTOP_AUTOSTART_ID')
+
+SM_DBUS_SERVICE = 'org.gnome.SessionManager'
+SM_DBUS_OBJECT_PATH = '/org/gnome/SessionManager'
+SM_DBUS_CLIENT_PRIVATE_PATH = 'org.gnome.SessionManager.ClientPrivate'
+SM_DBUS_CLIENT_ID = None
+
+NM_DBUS_SERVICE = 'org.freedesktop.NetworkManager'
+NM_DBUS_OBJECT_PATH = '/org/freedesktop/NetworkManager'
 
 NM_STATE_UNKNOWN = 0    # Networking state is unknown.
 NM_STATE_ASLEEP = 10    # Networking is inactive and all devices are disabled.
@@ -48,6 +58,7 @@ NM_STATE_CONNECTING = 40    # A network device is connecting to a network and th
 NM_STATE_CONNECTED_LOCAL = 50    # A network device is connected, but there is only link-local connectivity.
 NM_STATE_CONNECTED_SITE = 60    # A network device is connected, but there is only site-local connectivity.
 NM_STATE_CONNECTED_GLOBAL = 70    # A network device is connected, with global network connectivity.
+
 
 def log(message, priority=syslog.LOG_INFO):
     syslog.syslog(priority, message)
@@ -106,17 +117,6 @@ def mount_shared(shared):
     msg = '%s %s: ret_val == %s' % (stdout, stderr, retval)
     log('%s: %s' % (shared, msg.strip()))
 
-def on_nm_state_changed(state):
-    if state == NM_STATE_CONNECTED_GLOBAL:
-
-        log('NM_STATE_CONNECTED_GLOBAL signal received.')
-        shares = read_shares()
-
-        for shared in shares:
-            shared = shared.strip()
-            if shared_has_credentials(shared):
-                Process(target=mount_shared, args=(shared,)).start()
-
 def get_lock():
     if os.path.exists(get_lock_file()):
         log('Could not get lock, process exists with another PID.', syslog.LOG_ERR)
@@ -132,26 +132,99 @@ def get_lock():
         log('Could not write lock file in %s' % (get_lock_file(),), syslog.LOG_ERR)
         return False
 
+def on_nm_state_changed(state):
+    if state == NM_STATE_CONNECTED_GLOBAL:
+
+        log('NM_STATE_CONNECTED_GLOBAL signal received.')
+        shares = read_shares()
+
+        for shared in shares:
+            shared = shared.strip()
+            if shared_has_credentials(shared):
+                Process(target=mount_shared, args=(shared,)).start()
+
+def on_query_end_session(flags):
+
+    global sm_client
+    global SM_DBUS_CLIENT_ID
+
+    try:
+        end_session_response = sm_client.get_dbus_method('EndSessionResponse', SM_DBUS_CLIENT_PRIVATE_PATH)
+        end_session_response(True, '')
+
+    except Exception as e:
+        log(str(e))
+
+def on_end_session(flags):
+
+    global sm_client
+    global SM_DBUS_CLIENT_ID
+
+    try:
+        end_session_response = sm_client.get_dbus_method('EndSessionResponse', SM_DBUS_CLIENT_PRIVATE_PATH)
+        end_session_response(True, '')
+
+    except Exception as e:
+        log(str(e))
+
+def on_cancel_end_session():
+    pass
+
+def on_stop_session():
+    loop.quit()
+
+def register_dbus_client():
+
+    global SM_DBUS_CLIENT_ID
+
+    session_bus = dbus.SessionBus()
+    sm = session_bus.get_object(SM_DBUS_SERVICE, SM_DBUS_OBJECT_PATH)
+
+    register_client = sm.get_dbus_method('RegisterClient', SM_DBUS_SERVICE)
+    SM_DBUS_CLIENT_ID = register_client('gtk-bookmarks-automount', DESKTOP_AUTOSTART_ID)
+
+def connect_dbus_signals():
+
+    global sm_client
+    global SM_DBUS_CLIENT_ID
+
+    session_bus = dbus.SessionBus()
+    sm_client = session_bus.get_object(SM_DBUS_SERVICE, SM_DBUS_CLIENT_ID)
+    sm_client.connect_to_signal('QueryEndSession', on_query_end_session)
+    sm_client.connect_to_signal('EndSession', on_end_session)
+    sm_client.connect_to_signal('CancelEndSession', on_cancel_end_session)
+    sm_client.connect_to_signal('Stop', on_stop_session)
+
+    system_bus = dbus.SystemBus()
+    nm = system_bus.get_object(NM_DBUS_SERVICE, NM_DBUS_OBJECT_PATH)
+    nm.connect_to_signal('StateChanged', on_nm_state_changed)
+
 def main():
+
+    global loop
 
     if not get_lock():
         return
 
     DBusGMainLoop(set_as_default = True)
-    bus = dbus.SystemBus()
-    proxy = bus.get_object(NM_DBUS_SERVICE, NM_DBUS_OBJECT_PATH)
-    proxy.connect_to_signal('StateChanged', on_nm_state_changed)
 
     try:
+        register_dbus_client()
+        connect_dbus_signals()
+
         log('Starting gtk-bookmarks automount script...')
-        #gtk.main()
         loop = gobject.MainLoop()
         loop.run()
 
     except Exception as e:
         log(str(e), syslog.LOG_ERR)
 
-    os.unlink(get_lock_file())
+    try:
+        os.unlink(get_lock_file())
+
+    except Exception as e:
+        log(str(e), syslog.LOG_ERR)
+
     log('gtk-bookmarks automount script stoped.')
 
 if __name__ == '__main__':
