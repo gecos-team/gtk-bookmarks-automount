@@ -7,5 +7,5 @@ NoDisplay=true
 StartupNotify=false
 X-GNOME-Autostart-Phase=Application
 X-GNOME-Autostart-Notify=false
-X-GNOME-AutoRestart=true
+X-GNOME-AutoRestart=false
 X-Ubuntu-Gettext-Domain=gtk-bookmarks-automount
