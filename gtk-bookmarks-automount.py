@@ -77,6 +77,10 @@ def run_command(cmd):
     return (pid, retval, stdout, stderr)
 
 def read_shares():
+    ''' Read the remote shared resources and filter them
+    by protocol according to WATCHED_PROTOCOLS list.
+    Return a tuple of shares.
+    '''
 
     shares = []
 
@@ -93,6 +97,11 @@ def read_shares():
     return shares
 
 def shared_has_credentials(shared):
+    ''' Search for shared resource credentials in gnome-keyring.
+    This script only will try to connect to the shared resource if the
+    credentials were stored in the keyring.
+    '''
+
     parsed_uri = list(urlparse.urlparse(shared))
     protocol = parsed_uri[0]
     host = parsed_uri[1]
