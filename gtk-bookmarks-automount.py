@@ -35,8 +35,8 @@ from multiprocessing import Process
 loop = None
 sm_client = None
 
-LOCK_FILE_NAME = '.gtk-bookmarks-automount.lock'
-GTK_BOOKMARKS_NAME = '.gtk-bookmarks'
+LOCK_FILE = os.path.join(os.environ['HOME'], '.gtk-bookmarks-automount.lock')
+GTK_BOOKMARKS = os.path.join(os.environ['HOME'], '.gtk-bookmarks')
 GVFS_MOUNT = '/usr/bin/env gvfs-mount'
 WATCHED_PROTOCOLS = ('smb://',)
 
@@ -63,12 +63,6 @@ NM_STATE_CONNECTED_GLOBAL = 70    # A network device is connected, with global n
 def log(message, priority=syslog.LOG_INFO):
     syslog.syslog(priority, message)
 
-def get_lock_file():
-    return os.path.join(os.environ['HOME'], LOCK_FILE_NAME)
-
-def get_bookmarks_file():
-    return os.path.join(os.environ['HOME'], GTK_BOOKMARKS_NAME)
-
 def run_command(cmd):
     args = shlex.split(cmd)
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -83,22 +77,31 @@ def run_command(cmd):
     return (pid, retval, stdout, stderr)
 
 def read_shares():
+    ''' Read the remote shared resources and filter them
+    by protocol according to WATCHED_PROTOCOLS list.
+    Return a tuple of shares.
+    '''
 
     shares = []
 
     try:
-        f = open(get_bookmarks_file(), 'r')
+        f = open(GTK_BOOKMARKS, 'r')
         lines = f.readlines()
         f.close()
         def f(x): return x.startswith(WATCHED_PROTOCOLS)
         shares = filter(f, lines)
 
     except IOError as e:
-        log('Could not read the shared resources from %s' % (get_bookmarks_file(),), syslog.LOG_ERR)
+        log('Could not read the shared resources from %s' % (GTK_BOOKMARKS,), syslog.LOG_ERR)
 
     return shares
 
 def shared_has_credentials(shared):
+    ''' Search for shared resource credentials in gnome-keyring.
+    This script only will try to connect to the shared resource if the
+    credentials were stored in the keyring.
+    '''
+
     parsed_uri = list(urlparse.urlparse(shared))
     protocol = parsed_uri[0]
     host = parsed_uri[1]
@@ -118,21 +121,35 @@ def mount_shared(shared):
     log('%s: %s' % (shared, msg.strip()))
 
 def get_lock():
-    if os.path.exists(get_lock_file()):
-        log('Could not get lock, process exists with another PID.', syslog.LOG_ERR)
+    if os.path.exists(LOCK_FILE):
+        try:
+            f = open(LOCK_FILE, 'r')
+            pid = f.read()
+            pid = 'PID ' + pid.strip()
+            f.close()
+
+        except IOError as e:
+            pid = 'another PID.'
+
+        log('Could not get lock, process exists with %s' % (pid,), syslog.LOG_ERR)
         return False
 
     try:
-        f = open(get_lock_file(), 'w')
+        f = open(LOCK_FILE, 'w')
         f.write(str(os.getpid()))
         f.close()
         return True
 
     except IOError as e:
-        log('Could not write lock file in %s' % (get_lock_file(),), syslog.LOG_ERR)
+        log('Could not write lock file in %s' % (LOCK_FILE,), syslog.LOG_ERR)
         return False
 
 def on_nm_state_changed(state):
+    ''' Handle the NetworkManager state changed signal. If we have
+    global network connectivity then try to connect to the resources.
+    We launch a new thread for each resource.
+    '''
+
     if state == NM_STATE_CONNECTED_GLOBAL:
 
         log('NM_STATE_CONNECTED_GLOBAL signal received.')
@@ -144,9 +161,10 @@ def on_nm_state_changed(state):
                 Process(target=mount_shared, args=(shared,)).start()
 
 def on_query_end_session(flags):
-
-    global sm_client
-    global SM_DBUS_CLIENT_ID
+    ''' The QueryEndSession signal is emited by gnome-session when
+    someone / something is asking for logout the session.
+    We have to respond in one second if we agree or not.
+    '''
 
     try:
         end_session_response = sm_client.get_dbus_method('EndSessionResponse', SM_DBUS_CLIENT_PRIVATE_PATH)
@@ -156,9 +174,10 @@ def on_query_end_session(flags):
         log(str(e))
 
 def on_end_session(flags):
-
-    global sm_client
-    global SM_DBUS_CLIENT_ID
+    ''' The EndSession signal is emited by gnome-session when
+    the session is about to end. We have to respond in ten second if
+    we agree or not.
+    '''
 
     try:
         end_session_response = sm_client.get_dbus_method('EndSessionResponse', SM_DBUS_CLIENT_PRIVATE_PATH)
@@ -168,9 +187,16 @@ def on_end_session(flags):
         log(str(e))
 
 def on_cancel_end_session():
+    ''' The CancelEndSession signal is emited by gnome-session when
+    some application respond not-OK in the QueryEndSession or EndSession
+    signals.
+    '''
     pass
 
 def on_stop_session():
+    ''' The Stop signal is emited by gnome-session when
+    the session is going to be terminated.
+    '''
     loop.quit()
 
 def register_dbus_client():
@@ -186,7 +212,6 @@ def register_dbus_client():
 def connect_dbus_signals():
 
     global sm_client
-    global SM_DBUS_CLIENT_ID
 
     session_bus = dbus.SessionBus()
     sm_client = session_bus.get_object(SM_DBUS_SERVICE, SM_DBUS_CLIENT_ID)
@@ -202,6 +227,11 @@ def connect_dbus_signals():
 def main():
 
     global loop
+
+    if DESKTOP_AUTOSTART_ID is None:
+        log('This script is intended to be executed from xdg-autostart, \
+inside a gnome-session context.', syslog.LOG_ERR)
+        return
 
     if not get_lock():
         return
@@ -220,7 +250,7 @@ def main():
         log(str(e), syslog.LOG_ERR)
 
     try:
-        os.unlink(get_lock_file())
+        os.unlink(LOCK_FILE)
 
     except Exception as e:
         log(str(e), syslog.LOG_ERR)
