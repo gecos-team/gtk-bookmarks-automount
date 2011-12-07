@@ -22,7 +22,7 @@ Install
 -------
 
 - Copy the .desktop file to /etc/xdg/autostart/gtk-bookmarks-automount.desktop
-- Copy the python script to /usr/bin/gtk-bookmarks-automount.py
+- Copy the python script to /usr/bin/gtk-bookmarks-automount
 - Restart the gnome session.
 
 You should see then some messages in /var/log/syslog file.
