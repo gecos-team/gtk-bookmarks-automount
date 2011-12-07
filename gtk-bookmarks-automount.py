@@ -158,7 +158,10 @@ def on_nm_state_changed(state):
         for shared in shares:
             shared = shared.strip()
             if shared_has_credentials(shared):
-                Process(target=mount_shared, args=(shared,)).start()
+                try:
+                    Process(target=mount_shared, args=(shared,)).start()
+                except Exception as e:
+                    pass
 
 def on_query_end_session(flags):
     ''' The QueryEndSession signal is emited by gnome-session when
@@ -197,6 +200,12 @@ def on_stop_session():
     ''' The Stop signal is emited by gnome-session when
     the session is going to be terminated.
     '''
+    try:
+        unregister_dbus_client()
+
+    except Exception as e:
+        log(str(e))
+
     loop.quit()
 
 def register_dbus_client():
@@ -208,6 +217,14 @@ def register_dbus_client():
 
     register_client = sm.get_dbus_method('RegisterClient', SM_DBUS_SERVICE)
     SM_DBUS_CLIENT_ID = register_client('gtk-bookmarks-automount', DESKTOP_AUTOSTART_ID)
+
+def unregister_dbus_client():
+
+    session_bus = dbus.SessionBus()
+    sm = session_bus.get_object(SM_DBUS_SERVICE, SM_DBUS_OBJECT_PATH)
+
+    unregister_client = sm.get_dbus_method('UnregisterClient', SM_DBUS_SERVICE)
+    unregister_client(SM_DBUS_CLIENT_ID)
 
 def connect_dbus_signals():
 
